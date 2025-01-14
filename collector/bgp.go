@@ -64,6 +64,7 @@ func getBGPDesc() map[string]*prometheus.Desc {
 		"msgSent":               colPromDesc(bgpSubsystem, "peer_message_sent_total", "Number of sent messages.", bgpPeerLabels),
 		"prefixReceivedCount":   colPromDesc(bgpSubsystem, "peer_prefixes_received_count_total", "Number of prefixes received.", bgpPeerLabels),
 		"prefixAdvertisedCount": colPromDesc(bgpSubsystem, "peer_prefixes_advertised_count_total", "Number of prefixes advertised.", bgpPeerLabels),
+		"prefixAdvertisedRoute": colPromDesc(bgpSubsystem, "peer_prefixes_advertised_route", "Advertised prefix route.", append(bgpPeerLabels, "network")),
 		"state":                 colPromDesc(bgpSubsystem, "peer_state", "State of the peer (2 = Administratively Down, 1 = Established, 0 = Down).", bgpPeerLabels),
 		"UptimeSec":             colPromDesc(bgpSubsystem, "peer_uptime_seconds", "How long has the peer been up.", bgpPeerLabels),
 		"peerTypesUp":           colPromDesc(bgpSubsystem, "peer_types_up", "Total Number of Peer Types that are Up.", bgpPeerTypeLabels),
@@ -338,6 +339,11 @@ func getPeerAdvertisedPrefixes(ch chan<- prometheus.Metric, wg *sync.WaitGroup, 
 	}
 
 	newGauge(ch, bgpDesc["prefixAdvertisedCount"], float64(advertisedPrefixes.TotalPrefixCounter), peerLabels...)
+
+	for _, route := range advertisedPrefixes.AdvertisedRoutes {
+		labels := append(peerLabels, route.Network)
+		newGauge(ch, bgpDesc["prefixAdvertisedRoute"], 1, labels...)
+	}
 }
 
 type bgpProcess struct {
@@ -363,8 +369,14 @@ type bgpPeerSession struct {
 	PfxSnt              *uint32
 	Hostname            string
 }
+
+type bgpAdvertisedRoute struct {
+	Network string `json:"network"`
+}
+
 type bgpAdvertisedRoutes struct {
-	TotalPrefixCounter uint32 `json:"totalPrefixCounter"`
+	AdvertisedRoutes   map[string]bgpAdvertisedRoute `json:"advertisedRoutes"`
+	TotalPrefixCounter uint32                        `json:"totalPrefixCounter"`
 }
 
 func getBGPPeerDesc() (map[string]bgpVRF, error) {
